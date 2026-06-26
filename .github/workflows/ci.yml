@@ -1,0 +1,121 @@
+# PRDKit CI — run on every push & PR to main
+# Checks: lint, typecheck, build verification
+# Fail fast: lint dulu (paling cepat), baru typecheck, baru build
+
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+# Cancel previous runs on same branch (hemat CI minutes)
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Lint + Typecheck + Build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      # Use SQLite in-memory untuk CI (no real DB needed for build check)
+      DATABASE_URL: "file:./ci-test.db"
+      NEXTAUTH_SECRET: "ci-test-secret-do-not-use-in-production-32bytes"
+      NEXTAUTH_URL: "http://localhost:3000"
+      # Disable optional services di CI
+      # ANTHROPIC_API_KEY: not set (CI tidak call LLM)
+      # RESEND_API_KEY: not set
+      # UPSTASH_REDIS_REST_URL: not set
+      # SENTRY_DSN: not set
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            .next/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: bunx prisma generate
+
+      - name: Push schema to CI SQLite
+        run: bunx prisma db push --skip-generate
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bunx tsc --noEmit
+
+      - name: Build
+        run: bun run build
+        env:
+          # Skip Sentry upload di CI
+          SENTRY_AUTH_TOKEN: ""
+          SENTRY_ORG: ""
+          SENTRY_PROJECT: ""
+
+  security-audit:
+    name: Security Audit (bun audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Tetap run bahkan kalau CI job fail — audit independent
+    if: always()
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run security audit
+        # Fail hanya kalau ada HIGH/CRITICAL vulnerability di production deps
+        # Dev-only vulnerabilities (eslint, sentry transitive) di-ignore
+        run: |
+          echo "🔍 Running bun audit..."
+          bun audit 2>&1 | tee audit-output.txt || true
+          # Check apakah ada high/critical di production deps
+          # (untuk sekarang, just report — don't fail CI)
+          echo "📊 Audit complete. Review output di atas."
+
+  build-status:
+    name: Build Status (required for merge)
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    needs: [ci]
+    if: always()
+    steps:
+      - name: Check CI result
+        run: |
+          if [ "${{ needs.ci.result }}" = "success" ]; then
+            echo "✅ CI passed — safe to merge"
+            exit 0
+          else
+            echo "❌ CI failed — block merge"
+            exit 1
+          fi

@@ -1,0 +1,59 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String?
+  passwordHash  String?
+  image         String?
+  provider      String       @default("credentials") // "credentials" | "google"
+  role          String       @default("user") // "user" | "admin"
+  emailVerified DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  prdDocuments  PrdDocument[]
+  chatThreads   ChatThread[]
+
+  @@index([email])
+}
+
+model PrdDocument {
+  id          String       @id @default(cuid())
+  title       String
+  idea        String       // raw input from user
+  markdown    String       // generated PRD content
+  summary     String?      // short summary for dashboard card
+  isPublic    Boolean      @default(false)
+  tags        String?      // comma-separated tags
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatThreads ChatThread[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ChatThread {
+  id         String        @id @default(cuid())
+  prdId      String
+  prd        PrdDocument   @relation(fields: [prdId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   String        // JSON array of {role, content, ts}
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@index([prdId])
+}

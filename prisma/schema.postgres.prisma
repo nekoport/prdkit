@@ -1,0 +1,68 @@
+// PRDKit Prisma Schema — PostgreSQL (PRODUCTION)
+//
+// Cara pakai untuk deploy ke Vercel + Neon/Supabase:
+// 1. Buat akun di https://neon.tech (free tier, serverless Postgres)
+//    ATAU https://supabase.com (free tier, Postgres + Auth + Storage)
+// 2. Buat project baru, copy connection string
+// 3. Set DATABASE_URL di Vercel env var dengan connection string Neon/Supabase
+// 4. Ganti file prisma/schema.prisma dengan isi file ini
+// 5. Jalankan: bun run db:push (atau prisma migrate deploy untuk production)
+//
+// Untuk dev lokal, schema.prisma utama tetap pakai SQLite.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String       @id @default(cuid())
+  email         String       @unique
+  name          String?
+  passwordHash  String?
+  image         String?
+  provider      String       @default("credentials")
+  role          String       @default("user") // "user" | "admin"
+  emailVerified DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  prdDocuments  PrdDocument[]
+  chatThreads   ChatThread[]
+
+  @@index([email])
+}
+
+model PrdDocument {
+  id          String       @id @default(cuid())
+  title       String
+  idea        String
+  markdown    String
+  summary     String?
+  isPublic    Boolean      @default(false)
+  tags        String?
+  userId      String
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chatThreads ChatThread[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ChatThread {
+  id         String       @id @default(cuid())
+  prdId      String
+  prd        PrdDocument  @relation(fields: [prdId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+
+  @@index([prdId])
+}

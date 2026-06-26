@@ -1,0 +1,4 @@
+# Prisma migration lock file
+# https://www.prisma.io/docs/concepts/components/prisma-migrate/migration-lock
+
+provider = "sqlite"
