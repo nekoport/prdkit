@@ -1,12 +1,9 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
@@ -16,8 +13,8 @@ model User {
   name          String?
   passwordHash  String?
   image         String?
-  provider      String       @default("credentials") // "credentials" | "google"
-  role          String       @default("user") // "user" | "admin"
+  provider      String       @default("credentials")
+  role          String       @default("user")
   emailVerified DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -30,11 +27,11 @@ model User {
 model PrdDocument {
   id          String       @id @default(cuid())
   title       String
-  idea        String       // raw input from user
-  markdown    String       // generated PRD content
-  summary     String?      // short summary for dashboard card
+  idea        String
+  markdown    String
+  summary     String?
   isPublic    Boolean      @default(false)
-  tags        String?      // comma-separated tags
+  tags        String?
   userId      String
   user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   chatThreads ChatThread[]
@@ -46,14 +43,14 @@ model PrdDocument {
 }
 
 model ChatThread {
-  id         String        @id @default(cuid())
+  id         String       @id @default(cuid())
   prdId      String
-  prd        PrdDocument   @relation(fields: [prdId], references: [id], onDelete: Cascade)
+  prd        PrdDocument  @relation(fields: [prdId], references: [id], onDelete: Cascade)
   userId     String
-  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  messages   String        // JSON array of {role, content, ts}
-  createdAt  DateTime      @default(now())
-  updatedAt  DateTime      @updatedAt
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   String
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
   @@index([prdId])
 }
