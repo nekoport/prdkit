@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { requireAdminApi } from "@/lib/session";
 import { COST_PER_PRD, COST_PER_REVISION } from "@/lib/admin";
+import { getActiveProvider } from "@/lib/llm";
 
 export async function GET() {
   let user;
@@ -128,6 +129,10 @@ export async function GET() {
     const avgPrdPerUser = totalUsers > 0 ? totalPrds / totalUsers : 0;
 
     return NextResponse.json({
+      llmProvider: {
+        active: getActiveProvider(),
+        model: process.env.AGENTROUTER_MODEL || "claude-sonnet-4-5-20250929",
+      },
       overview: {
         totalUsers,
         totalPrds,

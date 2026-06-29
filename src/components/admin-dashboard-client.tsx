@@ -15,10 +15,15 @@ import {
   ArrowDownRight,
   Loader2,
   Activity,
+  Cpu,
 } from "lucide-react";
 import Link from "next/link";
 
 interface AdminStats {
+  llmProvider: {
+    active: string;
+    model: string;
+  };
   overview: {
     totalUsers: number;
     totalPrds: number;
@@ -103,7 +108,7 @@ export function AdminDashboardClient() {
 
   if (!stats) return null;
 
-  const { overview, charts, recent, breakdown, cost } = stats;
+  const { llmProvider, overview, charts, recent, breakdown, cost } = stats;
 
   return (
     <div className="space-y-6">
@@ -138,6 +143,23 @@ export function AdminDashboardClient() {
           sub={`${overview.last30dChatThreads} revisi 30 hari`}
         />
       </div>
+
+      {/* LLM Provider */}
+      <Card>
+        <div className="flex items-center gap-3 p-5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent/10 text-accent">
+            <Cpu className="h-5 w-5" />
+          </div>
+          <div className="flex-1">
+            <p className="text-xs text-muted-foreground">LLM Provider Aktif</p>
+            <p className="font-display text-lg font-bold capitalize">{llmProvider.active.replace("-", " ")}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground">Model</p>
+            <p className="font-mono text-sm font-semibold">{llmProvider.model}</p>
+          </div>
+        </div>
+      </Card>
 
       {/* Cost overview */}
       <Card className="overflow-hidden">
