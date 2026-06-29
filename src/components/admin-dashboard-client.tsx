@@ -152,7 +152,9 @@ export function AdminDashboardClient() {
           </div>
           <div className="flex-1">
             <p className="text-xs text-muted-foreground">LLM Provider Aktif</p>
-            <p className="font-display text-lg font-bold capitalize">{llmProvider.active.replace("-", " ")}</p>
+            <p className="font-display text-lg font-bold">
+              {llmProvider.active === "agentrouter-glm" ? "AgentRouter GLM" : llmProvider.active === "anthropic-claude" ? "Anthropic Claude" : "Z.AI (fallback)"}
+            </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted-foreground">Model</p>

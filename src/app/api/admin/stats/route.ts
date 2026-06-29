@@ -129,10 +129,16 @@ export async function GET() {
     const avgPrdPerUser = totalUsers > 0 ? totalPrds / totalUsers : 0;
 
     return NextResponse.json({
-      llmProvider: {
-        active: getActiveProvider(),
-        model: process.env.AGENTROUTER_MODEL || "claude-sonnet-4-5-20250929",
-      },
+      llmProvider: (() => {
+        const active = getActiveProvider();
+        const model =
+          active === "agentrouter-glm"
+            ? process.env.AGENTROUTER_MODEL || "glm-5.2"
+            : active === "anthropic-claude"
+              ? "claude-sonnet-4-5-20250929"
+              : "zai-default";
+        return { active, model };
+      })(),
       overview: {
         totalUsers,
         totalPrds,
