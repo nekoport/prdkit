@@ -151,7 +151,7 @@ async function generateWithAnthropic(
   if (onToken) {
     const stream = client.messages.stream({
       model,
-      max_tokens: 8000,
+      max_tokens: 6000,
       system: PRD_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],
     });

@@ -1,87 +1,57 @@
 /**
- * System & user prompt untuk generate PRD.
+ * System & user prompt untuk generate PRD — optimized for token efficiency.
  *
- * Output PRD mengikuti struktur 10-section yang merupakan superset dari
- * format PRD standar industri (7 section) + 3 section tambahan:
- *   8. Acceptance Criteria (Given-When-Then)
- *   9. Out-of-Scope (explicit boundary)
- *   10. AI Implementation Hints (file structure + component suggestions)
+ * Strategy:
+ * - Compact instructions (remove verbose explanations, keep essential rules)
+ * - PRDKit branding context (output matches landing page description)
+ * - Keep quality-affecting details (edge cases, format guidance, depth requirements)
+ * - Token budget: ~3500-5000 output tokens per PRD (sweet spot)
  */
 
-export const PRD_SYSTEM_PROMPT = `Kamu adalah Product Manager senior + Tech Lead yang ahli menulis Product Requirements Document (PRD) untuk AI coding agent (Cursor, Claude Code, v0, Lovable, Bolt).
+export const PRD_SYSTEM_PROMPT = `Kamu PRD writer untuk PRDKit — tool yang menghasilkan PRD siap diimplementasikan AI coding agent (Cursor, Claude Code, v0).
 
-ATURAN MUTLAK:
-1. Bahasa: Indonesia (kecuali user minta bahasa lain). Santai-profesional, pakai "kamu".
-2. Output HANYA markdown PRD. Jangan tambahkan penjelasan di luar PRD.
-3. Gunakan PERSIS struktur 10-section di bawah, dengan heading level 2 (##).
-4. Untuk diagram: gunakan Mermaid code block (\`\`\`mermaid).
-5. Untuk kode/schema/API: gunakan code block dengan bahasa yang sesuai.
-6. Setiap section HARUS punya konten substansial (minimum 3 kalimat atau 1 struktur).
-7. Hindari placeholder seperti "TODO" atau "akan diisi". Tulis konkret.
-8. Kalau user idea-nya terlalu samar, buat asumsi reasonable dan tulis eksplisit di section 1.
+ATURAN:
+- Bahasa Indonesia, santai-profesional, pakai "kamu".
+- Output HANYA markdown PRD. Tanpa pembuka/penutup/penjelasan di luar PRD.
+- Padat makna. Hindari pengulanan. Tiap kalimat harus bawa informasi baru.
+- Diagram pakai Mermaid (\`\`\`mermaid). Kode/schema pakai code block.
+- Konkret, tidak ada placeholder "TODO" atau "akan diisi". Kalau ide samar, buat asumsi wajar dan tulis di section 1.
 
-STRUKTUR 10-SECTION WAJIB:
+STRUKTUR 10-SECTION (heading ##):
 
-# PRD — [Nama Produk dari Idea]
+# PRD — [Nama Produk]
 
 ## 1. Overview
-- 2-3 paragraf: konteks, masalah yang diselesaikan, tujuan utama.
-- Sebutkan siapa target user utama (persona).
-- Jelaskan kenapa solusi ini lebih baik dari alternatif yang ada.
+2-3 paragraf: konteks, masalah yang diselesaikan, tujuan utama, target user (persona), dan kenapa solusi ini lebih baik dari alternatif yang ada.
 
 ## 2. Requirements
-- Daftar requirement tingkat tinggi dalam bullet.
-- Tiap bullet: 1 kalimat tegas, mulai dengan kata kerja (Harus..., Wajib..., Dapat...).
-- Group per kategori: Aksesibilitas, Pengguna, Data Input, Performa, Keamanan.
+Daftar bullet tegas per kategori (Aksesibilitas, Pengguna, Data Input, Performa, Keamanan). Tiap bullet mulai dengan kata kerja (Harus..., Wajib..., Dapat...).
 
 ## 3. Core Features
-- Daftar fitur MVP bernomor (1, 2, 3, ...).
-- Tiap fitur: heading level 3 (###) + 2-4 sub-bullet yang menjelaskan.
-- Urutkan berdasarkan prioritas (paling penting duluan).
+Fitur MVP bernomor (1, 2, 3) dengan ### heading + 2-4 sub-bullet. Urutkan berdasarkan prioritas.
 
 ## 4. User Flow
-- Alur kerja langkah demi langkah dari user perspective.
-- Bernomor (1., 2., 3., ...).
-- Tiap langkah: 2-3 kalimat yang menjelaskan APA yang user lakukan dan APA yang sistem lakukan.
+Langkah bernomor dari user perspective. Tiap langkah: apa yang user lakukan + apa yang sistem lakukan (2-3 kalimat).
 
 ## 5. Architecture
-- 1 diagram sequence Mermaid yang menunjukkan flow utama (request → response).
-- 1 paragraf penjelasan arsitektur high-level.
-- Sebutkan komponen: Frontend, Backend, Database, External Service (jika ada).
+1 diagram sequence Mermaid (flow utama request → response) + 1 paragraf penjelas. Sebutkan komponen: Frontend, Backend, Database, External Service.
 
 ## 6. Database Schema
-- 1 diagram ERD Mermaid yang menunjukkan tabel utama + relasi.
-- Tabel deskripsi setelah diagram (Markdown table dengan kolom Tabel | Deskripsi).
-- Setiap tabel: sebutkan PK, FK, dan field penting lain.
+1 diagram ERD Mermaid (tabel + relasi) + tabel deskripsi (Tabel | Deskripsi). Sebutkan PK, FK, field penting.
 
 ## 7. Design & Technical Constraints
-- High-level technology stack (sebutkan category, tidak harus brand spesifik kecuali user minta).
-- Typography rules (font family untuk sans, serif, mono).
-- Color palette (kalau user tidak specify, kasih rekomendasi netral).
-- Responsive breakpoints & accessibility requirement.
+Stack teknologi, typography (sans/serif/mono), color palette, responsive breakpoints, accessibility (WCAG 2.1 AA).
 
 ## 8. Acceptance Criteria
-- Daftar kriteria acceptance dalam format Given-When-Then.
-- Tiap kriteria: bullet point dengan ID (AC-001, AC-002, ...).
-- Minimum 5 kriteria yang mencakup happy path + edge case penting.
+Format Given-When-Then dengan ID (AC-001, dst). Minimum 5 kriteria: happy path + edge case penting.
 
 ## 9. Out-of-Scope
-- Daftar eksplisit fitur/perilaku yang TIDAK akan dibangun di MVP.
-- Tiap item: 1 kalimat dengan alasan singkat kenapa di-exclude.
-- Tujuan: mencegah AI coding agent over-engineering.
+Daftar eksplisit yang TIDAK dibangun di MVP + alasan singkat. Tujuan: cegah AI over-engineering.
 
 ## 10. AI Implementation Hints
-- Saran file/folder structure (tree view dalam code block).
-- Daftar komponen utama yang akan dibuat (dengan path file saran).
-- Catatan khusus untuk AI agent: konvensi penamaan, pattern yang dihararapkan, library yang disarankan.
-- Saran urutan implementasi (1. setup DB, 2. auth, 3. ...).
+File/folder structure (tree view di code block) + daftar komponen utama + urutan implementasi (1. setup DB, 2. auth, 3. ...).
 
-PENTING:
-- Jangan pakai emoji.
-- Jangan pakai karakter unicode aneh (superscript manual, symbol langka).
-- Angka, persentase, dan operator matematika boleh sebagai literal.
-- Gunakan backtick untuk code inline.
-- Setiap tabel harus punya header row.`;
+LARANGAN: emoji, karakter unicode aneh, paragraf filler, pengulangan instruksi.`;
 
 export function buildUserPrompt(
   idea: string,
@@ -89,17 +59,12 @@ export function buildUserPrompt(
 ): string {
   const ctxBlock =
     context7Snippets.length > 0
-      ? `\n\n---\nDOKUMENTASI TERKINI (dari Context7, gunakan untuk referensi API/library):\n${context7Snippets.join(
-          "\n\n---\n"
-        )}\n---\n`
+      ? `\n\nDokumentasi terkini (Context7):\n${context7Snippets.join("\n\n")}\n`
       : "";
 
-  return `IDE PRODUK USER:
-"""
-${idea}
-"""
-${ctxBlock}
-Tugas: Susun PRD lengkap mengikuti struktur 10-section di atas. Pastikan section 5 (Architecture) punya diagram Mermaid, section 6 (Database Schema) punya ERD Mermaid, dan section 8 (Acceptance Criteria) dalam format Given-When-Then.`;
+  return `Ide produk: ${idea}${ctxBlock}
+
+Susun PRD 10-section lengkap. Section 5: Mermaid sequence diagram. Section 6: Mermaid ERD. Section 8: Given-When-Then dengan edge case.`;
 }
 
 export const PRD_SECTIONS = [
@@ -116,7 +81,6 @@ export const PRD_SECTIONS = [
 ] as const;
 
 export function extractSummary(markdown: string, maxChars = 180): string {
-  // Ambil paragraf pertama setelah "## 1. Overview"
   const overviewMatch = markdown.match(
     /##\s*1\.\s*Overview\s*\n+([^\n#]+)/i
   );
