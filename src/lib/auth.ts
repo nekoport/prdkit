@@ -28,6 +28,7 @@ function getClientIP(req: any): string {
 
 export const authOptions: NextAuthOptions = {
   session: { strategy: "jwt" },
+  trustHost: true,
   pages: { signIn: "/sign-in" },
   providers: [
     CredentialsProvider({
