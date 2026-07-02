@@ -123,6 +123,7 @@ export default function NewPrdPage() {
       let prdId: string | null = null;
       let lastChunkAt = Date.now();
       let hasReceivedChunk = false;
+      let localStreamedContent = "";
 
       // Stall detector: kalau tidak ada chunk baru selama 2 menit, anggap stuck
       const stallDetector = setInterval(() => {
@@ -158,6 +159,7 @@ export default function NewPrdPage() {
                 setStreamStep(data.message);
               } else if (data.type === "chunk") {
                 hasReceivedChunk = true;
+                localStreamedContent += data.content;
                 setStreamedContent((prev) => prev + data.content);
               } else if (data.type === "complete") {
                 prdId = data.id;
@@ -180,9 +182,8 @@ export default function NewPrdPage() {
 
       // Kalau stream selesai tapi tidak ada complete event dan tidak ada error,
       // kemungkinan LLM return empty atau connection drop
-      if (genStatus === "running" && !prdId) {
-        if (streamedContent && streamedContent.length > 200) {
-          // Ada content tapi tidak save — anggap success dengan content yang ada
+      if (!prdId) {
+        if (localStreamedContent.length > 200) {
           throw new Error(
             "Stream selesai tapi PRD tidak tersimpan. Coba lagi atau gunakan endpoint non-streaming."
           );
@@ -409,12 +410,8 @@ export default function NewPrdPage() {
                 </div>
 
                 <PrdGenerationProgress
-                  status={genStatus === "cancelled" ? "error" : genStatus}
-                  errorMessage={
-                    genStatus === "cancelled"
-                      ? "Generate dibatalkan oleh user."
-                      : errorMsg
-                  }
+                  status={genStatus}
+                  errorMessage={errorMsg}
                 />
 
                 {/* Streaming preview — show partial PRD as it generates */}
@@ -438,23 +435,6 @@ export default function NewPrdPage() {
                       </pre>
                     </div>
                   )}
-
-                {(genStatus === "error" || genStatus === "cancelled") && (
-                  <div className="mt-6 flex flex-col items-center gap-3 border-t border-border/40 pt-6">
-                    <p className="text-center text-sm text-muted-foreground">
-                      {genStatus === "cancelled"
-                        ? "Generate dibatalkan. Ide kamu tetap tersimpan di form, kamu bisa coba lagi atau ubah dulu."
-                        : "Terjadi kesalahan saat generate. Coba lagi atau ganti ide kamu."}
-                    </p>
-                    <Button
-                      variant="outline"
-                      onClick={handleReset}
-                      className="gap-2"
-                    >
-                      Coba lagi
-                    </Button>
-                  </div>
-                )}
               </div>
             </Card>
           )}

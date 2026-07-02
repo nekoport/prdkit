@@ -26,7 +26,7 @@ function getClientIP(req: any): string {
   return xff?.split(",")[0]?.trim() || "unknown";
 }
 
-export const authOptions: NextAuthOptions = {
+export const authOptions = {
   session: { strategy: "jwt" },
   trustHost: true,
   pages: { signIn: "/sign-in" },
@@ -233,7 +233,7 @@ export const authOptions: NextAuthOptions = {
       return session;
     },
   },
-};
+} as NextAuthOptions;
 
 export const isGoogleEnabled = hasGoogle;
 export const isEmailVerificationEnabled = isEmailEnabled();

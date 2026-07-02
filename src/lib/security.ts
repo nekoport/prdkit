@@ -60,7 +60,7 @@ export function recordFailedAttempt(email: string): void {
     entry.failedAttempts += 1;
     if (entry.failedAttempts >= MAX_FAILED_ATTEMPTS) {
       entry.lockedUntil = now + LOCKOUT_DURATION_MS;
-      auditLog("ACCOUNT_LOCKED", { email, attempts: entry.failedAttempts });
+      auditLog("ACCOUNT_LOCKED", { email, details: { attempts: entry.failedAttempts } });
     }
   }
 
