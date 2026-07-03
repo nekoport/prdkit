@@ -61,11 +61,29 @@ export async function generatePrd(
     model = result.model;
   } else if (agentRouterKey) {
     // AgentRouter blocks Indonesian text — translate idea to English first
+    // Use Z.AI for translation (AgentRouter blocks Indonesian even for translation)
     const englishIdea = await translateToEnglish(input.idea);
     const userPrompt = buildUserPrompt(englishIdea, input.context7Snippets || []);
-    const result = await generateWithAgentRouter(userPrompt, input.onToken);
-    markdown = result.text;
-    model = result.model;
+    try {
+      const result = await generateWithAgentRouter(userPrompt, input.onToken);
+      markdown = result.text;
+      model = result.model;
+      // If AgentRouter returned empty content, fall back to Z.AI
+      if (!markdown || markdown.length < 50) {
+        console.warn("[generatePrd] AgentRouter returned empty content, falling back to Z.AI");
+        const zaiPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
+        const zaiResult = await generateWithZai(zaiPrompt, input.onToken);
+        markdown = zaiResult.text;
+        model = zaiResult.model;
+      }
+    } catch (err) {
+      // If AgentRouter fails, fall back to Z.AI
+      console.warn("[generatePrd] AgentRouter failed, falling back to Z.AI:", err);
+      const zaiPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
+      const zaiResult = await generateWithZai(zaiPrompt, input.onToken);
+      markdown = zaiResult.text;
+      model = zaiResult.model;
+    }
   } else {
     const userPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
     const result = await generateWithZai(userPrompt, input.onToken);
@@ -113,12 +131,31 @@ Rules:
     // Translate instruction to English for AgentRouter
     const englishInstruction = await translateToEnglish(instruction);
     const userRevise = `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction from user:\n${englishInstruction}\n\nOutput: complete revised spec in one markdown block.`;
-    const result = await callAgentRouter({
-      systemPrompt: systemRevise,
-      userPrompt: userRevise,
-      onToken: undefined,
+    try {
+      const result = await callAgentRouter({
+        systemPrompt: systemRevise,
+        userPrompt: userRevise,
+        onToken: undefined,
+      });
+      if (result.text && result.text.trim().length > 50) {
+        return { markdown: result.text.trim(), model: result.model };
+      }
+      // Empty content from AgentRouter — fall back to Z.AI
+      console.warn("[revisePrd] AgentRouter returned empty, falling back to Z.AI");
+    } catch (err) {
+      console.warn("[revisePrd] AgentRouter failed, falling back to Z.AI:", err);
+    }
+    // Fallback to Z.AI
+    const zai = await ZAI.create();
+    const completion = await zai.chat.completions.create({
+      messages: [
+        { role: "system", content: systemRevise },
+        { role: "user", content: `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction:\n${instruction}\n\nOutput: complete revised spec.` },
+      ],
+      thinking: { type: "disabled" },
     });
-    return { markdown: result.text.trim(), model: result.model };
+    const text = completion.choices[0]?.message?.content || "";
+    return { markdown: text.trim(), model: "zai-default" };
   }
 
   const zai = await ZAI.create();
@@ -134,37 +171,25 @@ Rules:
 }
 
 // ─── Translation helper (for AgentRouter Indonesian filter) ────
+// Uses Z.AI (free, no content filter) instead of AgentRouter
 async function translateToEnglish(text: string): Promise<string> {
-  if (!agentRouterKey) return text;
+  // If text is already English or very short, skip translation
+  if (text.length < 5) return text;
 
   try {
-    const res = await fetch(`${AGENTROUTER_BASE_URL}/chat/completions`, {
-      method: "POST",
-      headers: AGENTROUTER_HEADERS,
-      body: JSON.stringify({
-        model: AGENTROUTER_MODEL,
-        messages: [
-          {
-            role: "system",
-            content:
-              "Translate the following text to English. Output ONLY the translation, nothing else. If already in English, output as-is.",
-          },
-          { role: "user", content: text },
-        ],
-        max_tokens: 2000,
-        temperature: 0.3,
-        thinking: { type: "disabled" },
-      }),
-      signal: AbortSignal.timeout(30000),
+    const zai = await ZAI.create();
+    const completion = await zai.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content:
+            "Translate the following text to English. Output ONLY the translation, nothing else. If already in English, output as-is.",
+        },
+        { role: "user", content: text },
+      ],
+      thinking: { type: "disabled" },
     });
-
-    if (!res.ok) {
-      console.error("[translateToEnglish] error:", res.status);
-      return text;
-    }
-
-    const json = await res.json();
-    const translated = json?.choices?.[0]?.message?.content || "";
+    const translated = completion.choices[0]?.message?.content || "";
     return translated.trim() || text;
   } catch (err) {
     console.error("[translateToEnglish] failed:", err);
