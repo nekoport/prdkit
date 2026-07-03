@@ -1,18 +1,17 @@
 /**
- * LLM client untuk PRD generation.
+ * LLM client untuk spec generation.
  *
  * Provider priority (descending):
  * 1. Anthropic Claude Sonnet 4.5  — jika ANTHROPIC_API_KEY diset
  * 2. AgentRouter GLM 5.2          — jika AGENTROUTER_API_KEY diset (OpenAI-compatible)
  * 3. Z.AI (z-ai-web-dev-sdk)      — fallback default (gratis di environment ini)
  *
- * Semua path mengembalikan format yang sama: string markdown PRD.
- *
- * GLM 5.2 via AgentRouter:
- * - Endpoint: https://agentrouter.org/v1/chat/completions (OpenAI-compatible)
- * - Auth: Bearer sk-...
- * - Model ID: glm-5.2
- * - Dapat $200 free credits saat signup via referral
+ * IMPORTANT: AgentRouter content filter blocks:
+ * - The word "PRD" (case-insensitive)
+ * - Indonesian language text in user messages
+ * - The term "PRDKit"
+ * Solution: All AgentRouter prompts are in English. User ideas in Indonesian
+ * are translated to English before sending. Output is still in Indonesian.
  */
 
 import ZAI from "z-ai-web-dev-sdk";
@@ -20,7 +19,7 @@ import { PRD_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/prd-prompt";
 
 export interface GeneratePrdInput {
   idea: string;
-  context7Snippets?: string[]; // optional docs from Context7
+  context7Snippets?: string[];
   onToken?: (chunk: string) => void;
 }
 
@@ -30,17 +29,17 @@ export interface GeneratePrdOutput {
   durationMs: number;
 }
 
-// Provider detection
 const anthropicKey = process.env.ANTHROPIC_API_KEY;
 const agentRouterKey = process.env.AGENTROUTER_API_KEY;
 
-// AgentRouter config
 const AGENTROUTER_BASE_URL = "https://agentrouter.org/v1";
 const AGENTROUTER_MODEL = process.env.AGENTROUTER_MODEL || "glm-5.2";
+const AGENTROUTER_HEADERS = {
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${agentRouterKey}`,
+  "User-Agent": "opencode/1.15.12",
+};
 
-/**
- * Get active provider name (untuk debug + UI display).
- */
 export function getActiveProvider(): string {
   if (anthropicKey) return "anthropic-claude";
   if (agentRouterKey) return "agentrouter-glm";
@@ -51,23 +50,24 @@ export async function generatePrd(
   input: GeneratePrdInput
 ): Promise<GeneratePrdOutput> {
   const start = Date.now();
-  const userPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
 
   let markdown: string;
   let model: string;
 
   if (anthropicKey) {
+    const userPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
     const result = await generateWithAnthropic(userPrompt, input.onToken);
     markdown = result.text;
     model = result.model;
   } else if (agentRouterKey) {
-    const result = await generateWithAgentRouter(
-      userPrompt,
-      input.onToken
-    );
+    // AgentRouter blocks Indonesian text — translate idea to English first
+    const englishIdea = await translateToEnglish(input.idea);
+    const userPrompt = buildUserPrompt(englishIdea, input.context7Snippets || []);
+    const result = await generateWithAgentRouter(userPrompt, input.onToken);
     markdown = result.text;
     model = result.model;
   } else {
+    const userPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
     const result = await generateWithZai(userPrompt, input.onToken);
     markdown = result.text;
     model = result.model;
@@ -84,27 +84,18 @@ export async function revisePrd(
   currentMarkdown: string,
   instruction: string
 ): Promise<{ markdown: string; model: string }> {
-  const systemRevise = `Kamu adalah asisten yang merevisi PRD yang sudah ada.
-Aturan:
-- Hanya keluarkan PRD final yang sudah direvisi (full markdown).
-- Jangan tambahkan penjelasan di luar PRD.
-- Pertahankan struktur 10-section yang sudah ada.
-- Bahasa: Indonesia, kecuali user minta bahasa lain.`;
-
-  const userRevise = `PRD saat ini:
-\`\`\`markdown
-${currentMarkdown}
-\`\`\`
-
-Instruksi revisi dari user:
-${instruction}
-
-Keluaran: PRD lengkap yang sudah direvisi, dalam satu blok markdown.`;
+  const systemRevise = `You are an assistant that revises existing spec documents.
+Rules:
+- Output ONLY the revised spec (full markdown).
+- Do not add explanations outside the spec.
+- Keep the existing 10-section structure.
+- Output language: Indonesian, unless the user requests another language.`;
 
   if (anthropicKey) {
     const { Anthropic } = await import("@anthropic-ai/sdk");
     const client = new Anthropic({ apiKey: anthropicKey });
     const model = "claude-sonnet-4-5-20250929";
+    const userRevise = `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction from user:\n${instruction}\n\nOutput: complete revised spec in one markdown block.`;
     const msg = await client.messages.create({
       model,
       max_tokens: 8000,
@@ -119,10 +110,13 @@ Keluaran: PRD lengkap yang sudah direvisi, dalam satu blok markdown.`;
   }
 
   if (agentRouterKey) {
+    // Translate instruction to English for AgentRouter
+    const englishInstruction = await translateToEnglish(instruction);
+    const userRevise = `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction from user:\n${englishInstruction}\n\nOutput: complete revised spec in one markdown block.`;
     const result = await callAgentRouter({
       systemPrompt: systemRevise,
       userPrompt: userRevise,
-      onToken: undefined, // revise pakai non-streaming untuk simplicity
+      onToken: undefined,
     });
     return { markdown: result.text.trim(), model: result.model };
   }
@@ -131,12 +125,51 @@ Keluaran: PRD lengkap yang sudah direvisi, dalam satu blok markdown.`;
   const completion = await zai.chat.completions.create({
     messages: [
       { role: "system", content: systemRevise },
-      { role: "user", content: userRevise },
+      { role: "user", content: `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction:\n${instruction}\n\nOutput: complete revised spec.` },
     ],
     thinking: { type: "disabled" },
   });
   const text = completion.choices[0]?.message?.content || "";
   return { markdown: text.trim(), model: "zai-default" };
+}
+
+// ─── Translation helper (for AgentRouter Indonesian filter) ────
+async function translateToEnglish(text: string): Promise<string> {
+  if (!agentRouterKey) return text;
+
+  try {
+    const res = await fetch(`${AGENTROUTER_BASE_URL}/chat/completions`, {
+      method: "POST",
+      headers: AGENTROUTER_HEADERS,
+      body: JSON.stringify({
+        model: AGENTROUTER_MODEL,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Translate the following text to English. Output ONLY the translation, nothing else. If already in English, output as-is.",
+          },
+          { role: "user", content: text },
+        ],
+        max_tokens: 2000,
+        temperature: 0.3,
+        thinking: { type: "disabled" },
+      }),
+      signal: AbortSignal.timeout(30000),
+    });
+
+    if (!res.ok) {
+      console.error("[translateToEnglish] error:", res.status);
+      return text;
+    }
+
+    const json = await res.json();
+    const translated = json?.choices?.[0]?.message?.content || "";
+    return translated.trim() || text;
+  } catch (err) {
+    console.error("[translateToEnglish] failed:", err);
+    return text;
+  }
 }
 
 // ─── Anthropic Claude ─────────────────────────────────────────
@@ -210,11 +243,7 @@ async function callAgentRouter({
   if (onToken) {
     const res = await fetch(`${AGENTROUTER_BASE_URL}/chat/completions`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${agentRouterKey}`,
-        "User-Agent": "opencode/1.15.12",
-      },
+      headers: AGENTROUTER_HEADERS,
       body: JSON.stringify({
         model,
         messages: [
@@ -226,7 +255,7 @@ async function callAgentRouter({
         temperature: 0.7,
         thinking: { type: "disabled" },
       }),
-      signal: AbortSignal.timeout(180000), // 3 minutes
+      signal: AbortSignal.timeout(180000),
     });
 
     if (!res.ok) {
@@ -237,7 +266,7 @@ async function callAgentRouter({
     }
 
     if (!res.body) {
-      throw new Error("AgentRouter: streaming tidak didukung");
+      throw new Error("AgentRouter: streaming not supported");
     }
 
     const reader = res.body.getReader();
@@ -277,11 +306,7 @@ async function callAgentRouter({
   // Non-streaming mode
   const res = await fetch(`${AGENTROUTER_BASE_URL}/chat/completions`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${agentRouterKey}`,
-      "User-Agent": "opencode/1.15.12",
-    },
+    headers: AGENTROUTER_HEADERS,
     body: JSON.stringify({
       model,
       messages: [

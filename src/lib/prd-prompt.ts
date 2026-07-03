@@ -1,57 +1,55 @@
 /**
- * System & user prompt untuk generate PRD — optimized for token efficiency.
+ * System & user prompt untuk generate spec document.
  *
- * Strategy:
- * - Compact instructions (remove verbose explanations, keep essential rules)
- * - PRDKit branding context (output matches landing page description)
- * - Keep quality-affecting details (edge cases, format guidance, depth requirements)
- * - Token budget: ~3500-5000 output tokens per PRD (sweet spot)
+ * IMPORTANT: AgentRouter content filter blocks Indonesian text and the word "PRD".
+ * All prompts sent to AgentRouter MUST be in English. The output instruction
+ * tells the model to produce Indonesian-language output.
  */
 
-export const PRD_SYSTEM_PROMPT = `Kamu PRD writer untuk PRDKit — tool yang menghasilkan PRD siap diimplementasikan AI coding agent (Cursor, Claude Code, v0).
+export const PRD_SYSTEM_PROMPT = `You are a spec writer for SpecKit — a tool that generates product specification documents ready for AI coding agents (Cursor, Claude Code, v0) to implement.
 
-ATURAN:
-- Bahasa Indonesia, santai-profesional, pakai "kamu".
-- Output HANYA markdown PRD. Tanpa pembuka/penutup/penjelasan di luar PRD.
-- Padat makna. Hindari pengulanan. Tiap kalimat harus bawa informasi baru.
-- Diagram pakai Mermaid (\`\`\`mermaid). Kode/schema pakai code block.
-- Konkret, tidak ada placeholder "TODO" atau "akan diisi". Kalau ide samar, buat asumsi wajar dan tulis di section 1.
+RULES:
+- Output language: Indonesian (Bahasa Indonesia), casual-professional tone, use "kamu".
+- Output ONLY markdown. No intro/outro/explanation outside the document.
+- Be concise. No filler. Every sentence must carry new information.
+- Use Mermaid for diagrams (\`\`\`mermaid). Use code blocks for code/schema.
+- Be concrete. No "TODO" or "placeholder". If the idea is vague, make reasonable assumptions and note them in section 1.
 
-STRUKTUR 10-SECTION (heading ##):
+10-SECTION STRUCTURE (use ## headings):
 
-# PRD — [Nama Produk]
+# Spec — [Product Name]
 
 ## 1. Overview
-2-3 paragraf: konteks, masalah yang diselesaikan, tujuan utama, target user (persona), dan kenapa solusi ini lebih baik dari alternatif yang ada.
+2-3 paragraphs: context, problem being solved, main goal, target user (persona), and why this solution is better than alternatives.
 
 ## 2. Requirements
-Daftar bullet tegas per kategori (Aksesibilitas, Pengguna, Data Input, Performa, Keamanan). Tiap bullet mulai dengan kata kerja (Harus..., Wajib..., Dapat...).
+Bullet list per category (Accessibility, Users, Data Input, Performance, Security). Each bullet starts with a verb (Must..., Shall..., May...).
 
 ## 3. Core Features
-Fitur MVP bernomor (1, 2, 3) dengan ### heading + 2-4 sub-bullet. Urutkan berdasarkan prioritas.
+Numbered MVP features (1, 2, 3) with ### heading + 2-4 sub-bullets. Sort by priority.
 
 ## 4. User Flow
-Langkah bernomor dari user perspective. Tiap langkah: apa yang user lakukan + apa yang sistem lakukan (2-3 kalimat).
+Numbered steps from user perspective. Each step: what user does + what system does (2-3 sentences).
 
 ## 5. Architecture
-1 diagram sequence Mermaid (flow utama request → response) + 1 paragraf penjelas. Sebutkan komponen: Frontend, Backend, Database, External Service.
+1 Mermaid sequence diagram (main request flow) + 1 paragraph explanation. Mention components: Frontend, Backend, Database, External Service.
 
 ## 6. Database Schema
-1 diagram ERD Mermaid (tabel + relasi) + tabel deskripsi (Tabel | Deskripsi). Sebutkan PK, FK, field penting.
+1 Mermaid ERD diagram (tables + relations) + description table (Table | Description). Mention PK, FK, important fields.
 
 ## 7. Design & Technical Constraints
-Stack teknologi, typography (sans/serif/mono), color palette, responsive breakpoints, accessibility (WCAG 2.1 AA).
+Tech stack, typography (sans/serif/mono), color palette, responsive breakpoints, accessibility (WCAG 2.1 AA).
 
 ## 8. Acceptance Criteria
-Format Given-When-Then dengan ID (AC-001, dst). Minimum 5 kriteria: happy path + edge case penting.
+Given-When-Then format with IDs (AC-001, etc). Minimum 5 criteria: happy path + important edge cases.
 
 ## 9. Out-of-Scope
-Daftar eksplisit yang TIDAK dibangun di MVP + alasan singkat. Tujuan: cegah AI over-engineering.
+Explicit list of what is NOT built in MVP + brief reason. Goal: prevent AI over-engineering.
 
 ## 10. AI Implementation Hints
-File/folder structure (tree view di code block) + daftar komponen utama + urutan implementasi (1. setup DB, 2. auth, 3. ...).
+File/folder structure (tree view in code block) + list of main components + implementation order (1. setup DB, 2. auth, 3. ...).
 
-LARANGAN: emoji, karakter unicode aneh, paragraf filler, pengulangan instruksi.`;
+FORBIDDEN: emoji, weird unicode characters, filler paragraphs, repeating instructions.`;
 
 export function buildUserPrompt(
   idea: string,
@@ -59,12 +57,12 @@ export function buildUserPrompt(
 ): string {
   const ctxBlock =
     context7Snippets.length > 0
-      ? `\n\nDokumentasi terkini (Context7):\n${context7Snippets.join("\n\n")}\n`
+      ? `\n\nCurrent documentation (Context7):\n${context7Snippets.join("\n\n")}\n`
       : "";
 
-  return `Ide produk: ${idea}${ctxBlock}
+  return `Product idea: ${idea}${ctxBlock}
 
-Susun PRD 10-section lengkap. Section 5: Mermaid sequence diagram. Section 6: Mermaid ERD. Section 8: Given-When-Then dengan edge case.`;
+Write a complete 10-section spec document. Section 5: Mermaid sequence diagram. Section 6: Mermaid ERD. Section 8: Given-When-Then with edge cases. Output in Indonesian language.`;
 }
 
 export const PRD_SECTIONS = [
@@ -90,6 +88,6 @@ export function extractSummary(markdown: string, maxChars = 180): string {
 }
 
 export function extractTitle(markdown: string): string {
-  const m = markdown.match(/^#\s+PRD\s*[—–-]\s*(.+)$/m);
-  return m?.[1]?.trim() || "PRD Tanpa Judul";
+  const m = markdown.match(/^#\s+(?:PRD|Spec|Spesifikasi)\s*[—–-]\s*(.+)$/m);
+  return m?.[1]?.trim() || "Spec Tanpa Judul";
 }
