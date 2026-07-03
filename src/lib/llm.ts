@@ -224,6 +224,7 @@ async function callAgentRouter({
         stream: true,
         max_tokens: 8000,
         temperature: 0.7,
+        thinking: { type: "disabled" },
       }),
       signal: AbortSignal.timeout(180000), // 3 minutes
     });
@@ -289,6 +290,7 @@ async function callAgentRouter({
       ],
       max_tokens: 8000,
       temperature: 0.7,
+      thinking: { type: "disabled" },
     }),
     signal: AbortSignal.timeout(180000),
   });
