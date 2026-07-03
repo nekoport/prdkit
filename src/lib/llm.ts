@@ -4,17 +4,15 @@
  * Provider priority (descending):
  * 1. Anthropic Claude Sonnet 4.5  — jika ANTHROPIC_API_KEY diset
  * 2. AgentRouter GLM 5.2          — jika AGENTROUTER_API_KEY diset (OpenAI-compatible)
- * 3. Z.AI (z-ai-web-dev-sdk)      — fallback default (gratis di environment ini)
  *
  * IMPORTANT: AgentRouter content filter blocks:
- * - The word "PRD" (case-insensitive)
- * - Indonesian language text in user messages
- * - The term "PRDKit"
+ * - The word "PRD" (case-insensitive) and "PRDKit"
+ * - Indonesian language text in user/system messages
  * Solution: All AgentRouter prompts are in English. User ideas in Indonesian
- * are translated to English before sending. Output is still in Indonesian.
+ * are translated to English via Google Translate before sending.
+ * Output is still in Indonesian (instructed in system prompt).
  */
 
-import ZAI from "z-ai-web-dev-sdk";
 import { PRD_SYSTEM_PROMPT, buildUserPrompt } from "@/lib/prd-prompt";
 
 export interface GeneratePrdInput {
@@ -43,7 +41,34 @@ const AGENTROUTER_HEADERS = {
 export function getActiveProvider(): string {
   if (anthropicKey) return "anthropic-claude";
   if (agentRouterKey) return "agentrouter-glm";
-  return "zai-fallback";
+  return "none";
+}
+
+// ─── Google Translate (free, no API key needed) ────────────────
+async function translateToEnglish(text: string): Promise<string> {
+  if (text.length < 5) return text;
+  try {
+    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q=${encodeURIComponent(text)}`;
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error("[translateToEnglish] HTTP", res.status);
+      return text;
+    }
+    const data = await res.json();
+    // Response format: [[[translatedSegment, originalSegment, ...], ...], ...]
+    if (Array.isArray(data) && Array.isArray(data[0])) {
+      const translated = data[0]
+        .map((seg: any) => (Array.isArray(seg) ? seg[0] : ""))
+        .join("");
+      return translated.trim() || text;
+    }
+    return text;
+  } catch (err) {
+    console.error("[translateToEnglish] failed:", err);
+    return text;
+  }
 }
 
 export async function generatePrd(
@@ -60,35 +85,16 @@ export async function generatePrd(
     markdown = result.text;
     model = result.model;
   } else if (agentRouterKey) {
-    // AgentRouter blocks Indonesian text — translate idea to English first
-    // Use Z.AI for translation (AgentRouter blocks Indonesian even for translation)
+    // AgentRouter blocks Indonesian — translate idea to English first
     const englishIdea = await translateToEnglish(input.idea);
     const userPrompt = buildUserPrompt(englishIdea, input.context7Snippets || []);
-    try {
-      const result = await generateWithAgentRouter(userPrompt, input.onToken);
-      markdown = result.text;
-      model = result.model;
-      // If AgentRouter returned empty content, fall back to Z.AI
-      if (!markdown || markdown.length < 50) {
-        console.warn("[generatePrd] AgentRouter returned empty content, falling back to Z.AI");
-        const zaiPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
-        const zaiResult = await generateWithZai(zaiPrompt, input.onToken);
-        markdown = zaiResult.text;
-        model = zaiResult.model;
-      }
-    } catch (err) {
-      // If AgentRouter fails, fall back to Z.AI
-      console.warn("[generatePrd] AgentRouter failed, falling back to Z.AI:", err);
-      const zaiPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
-      const zaiResult = await generateWithZai(zaiPrompt, input.onToken);
-      markdown = zaiResult.text;
-      model = zaiResult.model;
-    }
-  } else {
-    const userPrompt = buildUserPrompt(input.idea, input.context7Snippets || []);
-    const result = await generateWithZai(userPrompt, input.onToken);
+    const result = await generateWithAgentRouter(userPrompt, input.onToken);
     markdown = result.text;
     model = result.model;
+  } else {
+    throw new Error(
+      "No LLM provider configured. Set ANTHROPIC_API_KEY or AGENTROUTER_API_KEY."
+    );
   }
 
   return {
@@ -131,70 +137,17 @@ Rules:
     // Translate instruction to English for AgentRouter
     const englishInstruction = await translateToEnglish(instruction);
     const userRevise = `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction from user:\n${englishInstruction}\n\nOutput: complete revised spec in one markdown block.`;
-    try {
-      const result = await callAgentRouter({
-        systemPrompt: systemRevise,
-        userPrompt: userRevise,
-        onToken: undefined,
-      });
-      if (result.text && result.text.trim().length > 50) {
-        return { markdown: result.text.trim(), model: result.model };
-      }
-      // Empty content from AgentRouter — fall back to Z.AI
-      console.warn("[revisePrd] AgentRouter returned empty, falling back to Z.AI");
-    } catch (err) {
-      console.warn("[revisePrd] AgentRouter failed, falling back to Z.AI:", err);
-    }
-    // Fallback to Z.AI
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: systemRevise },
-        { role: "user", content: `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction:\n${instruction}\n\nOutput: complete revised spec.` },
-      ],
-      thinking: { type: "disabled" },
+    const result = await callAgentRouter({
+      systemPrompt: systemRevise,
+      userPrompt: userRevise,
+      onToken: undefined,
     });
-    const text = completion.choices[0]?.message?.content || "";
-    return { markdown: text.trim(), model: "zai-default" };
+    return { markdown: result.text.trim(), model: result.model };
   }
 
-  const zai = await ZAI.create();
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: "system", content: systemRevise },
-      { role: "user", content: `Current spec:\n\`\`\`markdown\n${currentMarkdown}\n\`\`\`\n\nRevision instruction:\n${instruction}\n\nOutput: complete revised spec.` },
-    ],
-    thinking: { type: "disabled" },
-  });
-  const text = completion.choices[0]?.message?.content || "";
-  return { markdown: text.trim(), model: "zai-default" };
-}
-
-// ─── Translation helper (for AgentRouter Indonesian filter) ────
-// Uses Z.AI (free, no content filter) instead of AgentRouter
-async function translateToEnglish(text: string): Promise<string> {
-  // If text is already English or very short, skip translation
-  if (text.length < 5) return text;
-
-  try {
-    const zai = await ZAI.create();
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content:
-            "Translate the following text to English. Output ONLY the translation, nothing else. If already in English, output as-is.",
-        },
-        { role: "user", content: text },
-      ],
-      thinking: { type: "disabled" },
-    });
-    const translated = completion.choices[0]?.message?.content || "";
-    return translated.trim() || text;
-  } catch (err) {
-    console.error("[translateToEnglish] failed:", err);
-    return text;
-  }
+  throw new Error(
+    "No LLM provider configured. Set ANTHROPIC_API_KEY or AGENTROUTER_API_KEY."
+  );
 }
 
 // ─── Anthropic Claude ─────────────────────────────────────────
@@ -355,43 +308,4 @@ async function callAgentRouter({
   const json = await res.json();
   const text = json?.choices?.[0]?.message?.content || "";
   return { text, model: `agentrouter-${model}` };
-}
-
-// ─── Z.AI fallback ────────────────────────────────────────────
-async function generateWithZai(
-  userPrompt: string,
-  onToken?: (c: string) => void
-): Promise<{ text: string; model: string }> {
-  const zai = await ZAI.create();
-
-  if (onToken) {
-    let text = "";
-    const completion = await zai.chat.completions.create({
-      messages: [
-        { role: "system", content: PRD_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      stream: true,
-      thinking: { type: "disabled" },
-    } as any);
-
-    for await (const chunk of completion as any) {
-      const delta = chunk?.choices?.[0]?.delta?.content || "";
-      if (delta) {
-        text += delta;
-        onToken(delta);
-      }
-    }
-    return { text, model: "zai-stream" };
-  }
-
-  const completion = await zai.chat.completions.create({
-    messages: [
-      { role: "system", content: PRD_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    thinking: { type: "disabled" },
-  });
-  const text = completion.choices[0]?.message?.content || "";
-  return { text, model: "zai-default" };
 }

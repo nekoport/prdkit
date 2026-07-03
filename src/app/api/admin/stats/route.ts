@@ -136,7 +136,7 @@ export async function GET() {
             ? process.env.AGENTROUTER_MODEL || "glm-5.2"
             : active === "anthropic-claude"
               ? "claude-sonnet-4-5-20250929"
-              : "zai-default";
+              : "none";
         return { active, model };
       })(),
       overview: {

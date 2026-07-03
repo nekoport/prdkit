@@ -39,11 +39,10 @@ export async function GET() {
   }
 
   // 3. LLM provider (at least one must be present)
-  //    Priority: Anthropic > AgentRouter (GLM 5.2) > Z.AI
+  //    Priority: Anthropic > AgentRouter (GLM 5.2)
   checks.llmProvider = !!(
     process.env.ANTHROPIC_API_KEY ||
-    process.env.AGENTROUTER_API_KEY ||
-    process.env.ZAI_API_KEY
+    process.env.AGENTROUTER_API_KEY
   );
   if (!checks.llmProvider) {
     allHealthy = false;
@@ -53,7 +52,6 @@ export async function GET() {
   (checks as any).providerActive = (
     process.env.ANTHROPIC_API_KEY ? "anthropic" :
     process.env.AGENTROUTER_API_KEY ? "agentrouter-glm" :
-    process.env.ZAI_API_KEY ? "zai" :
     "none"
   );
 

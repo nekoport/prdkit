@@ -153,7 +153,7 @@ export function AdminDashboardClient() {
           <div className="flex-1">
             <p className="text-xs text-muted-foreground">LLM Provider Aktif</p>
             <p className="font-display text-lg font-bold">
-              {llmProvider.active === "agentrouter-glm" ? "AgentRouter GLM" : llmProvider.active === "anthropic-claude" ? "Anthropic Claude" : "Z.AI (fallback)"}
+              {llmProvider.active === "agentrouter-glm" ? "AgentRouter GLM" : llmProvider.active === "anthropic-claude" ? "Anthropic Claude" : "None"}
             </p>
           </div>
           <div className="text-right">
