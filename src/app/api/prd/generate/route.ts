@@ -13,6 +13,10 @@ import { auditLog } from "@/lib/security";
 import { sanitizeError } from "@/lib/error-sanitizer";
 import { z } from "zod";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
 const BodySchema = z.object({
   idea: z.string().min(20, "Ide minimal 20 karakter").max(5000, "Ide maksimal 5000 karakter"),
 });

@@ -153,26 +153,27 @@ export default function NewPrdPage() {
 
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
+            let data;
             try {
-              const data = JSON.parse(line.slice(6));
-              if (data.type === "progress") {
-                setStreamStep(data.message);
-              } else if (data.type === "chunk") {
-                hasReceivedChunk = true;
-                localStreamedContent += data.content;
-                setStreamedContent((prev) => prev + data.content);
-              } else if (data.type === "complete") {
-                prdId = data.id;
-                setGenStatus("done");
-                toast.success("PRD berhasil dibuat!");
-                setTimeout(() => {
-                  if (prdId) router.push(`/prd/${prdId}`);
-                }, 1000);
-              } else if (data.type === "error") {
-                throw new Error(data.message);
-              }
-            } catch (parseErr) {
-              // ignore parse errors
+              data = JSON.parse(line.slice(6));
+            } catch {
+              continue;
+            }
+            if (data.type === "progress") {
+              setStreamStep(data.message);
+            } else if (data.type === "chunk") {
+              hasReceivedChunk = true;
+              localStreamedContent += data.content;
+              setStreamedContent((prev) => prev + data.content);
+            } else if (data.type === "complete") {
+              prdId = data.id;
+              setGenStatus("done");
+              toast.success("PRD berhasil dibuat!");
+              setTimeout(() => {
+                if (prdId) router.push(`/prd/${prdId}`);
+              }, 1000);
+            } else if (data.type === "error") {
+              throw new Error(data.message);
             }
           }
         }
