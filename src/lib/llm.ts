@@ -213,6 +213,7 @@ async function callAgentRouter({
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${agentRouterKey}`,
+        "User-Agent": "opencode/1.15.12",
       },
       body: JSON.stringify({
         model,
@@ -278,6 +279,7 @@ async function callAgentRouter({
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${agentRouterKey}`,
+      "User-Agent": "opencode/1.15.12",
     },
     body: JSON.stringify({
       model,
